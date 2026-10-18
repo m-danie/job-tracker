@@ -79,7 +79,10 @@ export function AuthForm({ mode }: AuthFormProps) {
           </p>
         )}
 
-        <button type="submit" className="btn btn-block mt-4">
+        <button
+          type="submit"
+          className={`btn btn-outline mt-4 ${isRegister ? "btn-secondary" : "btn-primary"}`}
+        >
           {isRegister ? "Register" : "Log in"}
         </button>
       </fieldset>
