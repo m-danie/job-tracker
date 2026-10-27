@@ -128,7 +128,7 @@ export function ApplicationForm({
         </p>
 
         <div className="mt-2 flex gap-2">
-          <button type="submit" className="btn btn-primary">
+          <button type="submit" className={`btn ${editing ? "btn-success" : "btn-primary"}`}>
             {pending && <span className="loading loading-spinner loading-sm" />}
             {editing ? "Save changes" : "Save application"}
           </button>
