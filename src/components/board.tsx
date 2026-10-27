@@ -187,7 +187,7 @@ function ApplicationSummary({ item }: { item: BoardApplication }) {
         <form method="dialog">
           <button className="btn">Close</button>
         </form>
-        <Link href={`/applications/${item.id}`} className="btn btn-primary">
+        <Link href={`/applications/${item.id}`} className="btn btn-soft btn-secondary">
           More details
         </Link>
       </div>

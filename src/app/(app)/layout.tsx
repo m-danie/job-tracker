@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { signOutAction } from "@/app/(auth)/actions";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { getCurrentUser } from "@/utils/session";
 
 // Shell for signed-in pages. src/proxy.ts and getCurrentUser() protect them.
@@ -13,6 +14,7 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
             Job Tracker
           </Link>
         </div>
+        <ThemeToggle />
         <Suspense fallback={<span className="loading loading-spinner loading-sm" aria-label="Loading" />}>
           <UserMenu />
         </Suspense>

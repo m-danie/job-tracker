@@ -80,7 +80,7 @@ async function ApplicationDetails({ params }: Pick<PageProps<"/applications/[id]
                   {formatDate(event.changedAt)}
                 </div>
                 <div className="timeline-middle">
-                  <span className="block size-2 rounded-full bg-primary" />
+                  <span className="block size-2 rounded-full bg-accent" />
                 </div>
                 <div className="timeline-end timeline-box text-sm">
                   {event.fromStage
