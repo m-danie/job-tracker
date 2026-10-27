@@ -52,3 +52,4 @@ NOTES.md
 
 # neon (linked org/project/branch, written by `neon link`)
 .neon
+graphify-out/
