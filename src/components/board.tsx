@@ -245,7 +245,7 @@ function Card({ item, onOpen, onDelete }: { item: BoardApplication } & CardActio
       aria-roledescription="draggable application"
       // dnd-kit swallows the click that ends a drag, so this only fires on a plain click
       onClick={() => onOpen(item)}
-      className={`card card-sm cursor-grab border border-base-300 bg-base-100 shadow-sm ${isDragging ? "relative z-10 shadow-lg" : ""}`}
+      className={`card card-sm cursor-grab border border-base-content/25 bg-base-100 shadow-sm ${isDragging ? "relative z-10 shadow-lg" : ""}`}
     >
       <div className="card-body">
         <div className="flex items-start justify-between gap-2">
