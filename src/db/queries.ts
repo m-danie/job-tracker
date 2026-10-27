@@ -13,6 +13,13 @@ export async function getBoardApplications(userId: string) {
       stage: application.stage,
       stageChangedAt: application.stageChangedAt,
       company: company.name,
+      // For the card's quick-view popup
+      appliedOn: application.appliedOn,
+      salaryMin: application.salaryMin,
+      salaryMax: application.salaryMax,
+      salaryCurrency: application.salaryCurrency,
+      postingUrl: application.postingUrl,
+      notes: application.notes,
     })
     .from(application)
     .innerJoin(company, eq(company.id, application.companyId))

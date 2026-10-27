@@ -120,6 +120,16 @@ export async function moveApplicationAction(id: string, stage: string) {
   revalidatePath("/board");
 }
 
+export async function deleteApplicationAction(id: string) {
+  const user = await getCurrentUser();
+  const parsed = z.uuid().parse(id);
+  // Stage history and contact links cascade; the company and contacts stay for reuse
+  await db
+    .delete(application)
+    .where(and(eq(application.id, parsed), eq(application.userId, user.id)));
+  revalidatePath("/board");
+}
+
 const contactSchema = z.object({
   applicationId: z.uuid(),
   name: z.string().trim().min(1, { error: "Enter the contact's name." }).max(200),
