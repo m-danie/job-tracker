@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { authClient } from "@/utils/auth-client";
@@ -25,6 +25,17 @@ export function AuthForm({ mode }: AuthFormProps) {
   const emailId = `${id}-email`;
   const passwordId = `${id}-password`;
   const hintId = `${id}-password-hint`;
+
+  // Next.js keeps this page mounted (hidden) after a successful sign-in navigates away,
+  // and shows the same instance again on sign-out. Reset when it's hidden, or the form
+  // comes back still disabled and "signing in".
+  useEffect(
+    () => () => {
+      setPending(null);
+      setError(null);
+    },
+    [],
+  );
 
   async function run(kind: Pending, request: () => Promise<{ error: unknown }>) {
     setPending(kind);
