@@ -1,7 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useId } from "react";
-import { createApplicationAction, type FormState } from "@/app/(app)/applications/actions";
+import {
+  createApplicationAction,
+  updateApplicationAction,
+  type FormState,
+} from "@/app/(app)/applications/actions";
 
 const initialState: FormState = { status: "idle" };
 
@@ -9,11 +14,25 @@ const initialState: FormState = { status: "idle" };
 const requiredMark = <span className="text-error" aria-hidden="true">*</span>;
 const optionalMark = <span className="text-base-content/60">(optional)</span>;
 
-export function ApplicationForm({ companies }: { companies: string[] }) {
-  const [state, formAction, pending] = useActionState(createApplicationAction, initialState);
+// Field values as strings, keyed by input name
+export type ApplicationValues = Record<string, string>;
+
+export function ApplicationForm({
+  companies,
+  editing,
+}: {
+  companies: string[];
+  // Present when editing: the application's id and its current values
+  editing?: { id: string; values: ApplicationValues };
+}) {
+  const [state, formAction, pending] = useActionState(
+    editing ? updateApplicationAction.bind(null, editing.id) : createApplicationAction,
+    initialState,
+  );
   const id = useId();
   const field = (name: string) => `${id}-${name}`;
-  const value = (name: string) => state.values?.[name];
+  // After a failed submit, show what was sent; otherwise the saved values
+  const value = (name: string) => (state.values ?? editing?.values)?.[name];
 
   return (
     <form action={formAction} className="max-w-xl">
@@ -108,10 +127,17 @@ export function ApplicationForm({ companies }: { companies: string[] }) {
           Fields marked {requiredMark} are required.
         </p>
 
-        <button type="submit" className="btn btn-primary mt-2 self-start">
-          {pending && <span className="loading loading-spinner loading-sm" />}
-          Save application
-        </button>
+        <div className="mt-2 flex gap-2">
+          <button type="submit" className="btn btn-primary">
+            {pending && <span className="loading loading-spinner loading-sm" />}
+            {editing ? "Save changes" : "Save application"}
+          </button>
+          {editing && (
+            <Link href={`/applications/${editing.id}`} className="btn btn-ghost">
+              Cancel
+            </Link>
+          )}
+        </div>
       </fieldset>
     </form>
   );

@@ -53,6 +53,22 @@ const applicationSchema = z
     error: "The minimum salary is higher than the maximum.",
   });
 
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Reuse the user's existing company (case-insensitive) or create it
+async function companyIdFor(tx: Transaction, userId: string, name: string) {
+  const [existing] = await tx
+    .select({ id: company.id })
+    .from(company)
+    .where(and(eq(company.userId, userId), sql`lower(${company.name}) = lower(${name})`));
+  if (existing) return existing.id;
+  const [created] = await tx
+    .insert(company)
+    .values({ userId, name })
+    .returning({ id: company.id });
+  return created.id;
+}
+
 export async function createApplicationAction(
   _previous: FormState,
   formData: FormData,
@@ -65,20 +81,7 @@ export async function createApplicationAction(
   const { company: companyName, ...fields } = parsed.data;
 
   const id = await db.transaction(async (tx) => {
-    // Reuse the user's existing company (case-insensitive) or create it
-    const [existing] = await tx
-      .select({ id: company.id })
-      .from(company)
-      .where(and(eq(company.userId, user.id), sql`lower(${company.name}) = lower(${companyName})`));
-    const companyId =
-      existing?.id ??
-      (
-        await tx
-          .insert(company)
-          .values({ userId: user.id, name: companyName })
-          .returning({ id: company.id })
-      )[0].id;
-
+    const companyId = await companyIdFor(tx, user.id, companyName);
     const [created] = await tx
       .insert(application)
       .values({ ...fields, userId: user.id, companyId })
@@ -88,6 +91,53 @@ export async function createApplicationAction(
   });
 
   revalidatePath("/board");
+  redirect(`/applications/${id}`);
+}
+
+// Bound to the application's id in the form: updateApplicationAction.bind(null, id)
+export async function updateApplicationAction(
+  id: string,
+  _previous: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await getCurrentUser();
+  const parsed = applicationSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success || !z.uuid().safeParse(id).success) {
+    return errorState(parsed.error?.issues[0].message ?? "Application not found.", formData);
+  }
+  const { company: companyName, ...fields } = parsed.data;
+
+  const found = await db.transaction(async (tx) => {
+    // Check ownership first so a foreign id can't leave a stray company behind
+    const [owned] = await tx
+      .select({ id: application.id })
+      .from(application)
+      .where(and(eq(application.id, id), eq(application.userId, user.id)));
+    if (!owned) return false;
+
+    const companyId = await companyIdFor(tx, user.id, companyName);
+    // Cleared optional fields arrive as undefined, which Drizzle would skip; store them as null
+    await tx
+      .update(application)
+      .set({
+        companyId,
+        role: fields.role,
+        postingUrl: fields.postingUrl,
+        appliedOn: fields.appliedOn ?? null,
+        salaryMin: fields.salaryMin ?? null,
+        salaryMax: fields.salaryMax ?? null,
+        salaryCurrency: fields.salaryCurrency,
+        notes: fields.notes ?? null,
+      })
+      .where(eq(application.id, id));
+    return true;
+  });
+  if (!found) {
+    return errorState("Application not found.", formData);
+  }
+
+  revalidatePath("/board");
+  revalidatePath(`/applications/${id}`);
   redirect(`/applications/${id}`);
 }
 
