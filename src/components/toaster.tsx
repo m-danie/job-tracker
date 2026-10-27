@@ -6,6 +6,9 @@ export function Toaster() {
   return (
     <SonnerToaster
       position="bottom-right"
+      // Stack above the theme toggle in the same corner
+      offset={{ bottom: 72, right: 16 }}
+      mobileOffset={{ bottom: 72 }}
       toastOptions={{
         unstyled: true,
         classNames: {

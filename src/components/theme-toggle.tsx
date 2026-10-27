@@ -39,11 +39,12 @@ export function ThemeToggle() {
   const theme = useSyncExternalStore(subscribe, currentTheme, () => "light" as Theme);
 
   return (
-    <label className="swap swap-rotate btn btn-circle btn-ghost btn-sm">
-      {/* No daisyUI `theme-controller` class: its CSS forces dark while any checked controller
-          exists, including the stale one on a page Next keeps mounted in the background */}
+    <label className="swap swap-rotate btn btn-circle shadow-lg">
+      {/* Safe as a theme-controller now: it lives in the root layout, so there is only ever one */}
       <input
         type="checkbox"
+        className="theme-controller"
+        value="dark"
         aria-label="Dark mode"
         checked={theme === "dark"}
         onChange={(event) => setTheme(event.target.checked ? "dark" : "light")}

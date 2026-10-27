@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Script from "next/script";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Toaster } from "@/components/toaster";
 import "./globals.css";
 
@@ -38,6 +39,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-full flex flex-col">
         {children}
+        <div className="fixed right-4 bottom-4 z-40">
+          <ThemeToggle />
+        </div>
         <Toaster />
       </body>
     </html>
