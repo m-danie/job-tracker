@@ -38,7 +38,11 @@ const applicationSchema = z
   .object({
     company: z.string().trim().min(1, { error: "Enter the company." }).max(200),
     role: z.string().trim().min(1, { error: "Enter the role." }).max(200),
-    postingUrl: optional(z.url({ protocol: /^https?$/, error: "Enter a valid link (https://…)." })),
+    postingUrl: z
+      .string()
+      .trim()
+      .min(1, { error: "Enter the link to the posting." })
+      .pipe(z.url({ protocol: /^https?$/, error: "Enter a valid link (https://…)." })),
     appliedOn: optional(z.iso.date({ error: "Enter a valid date." })),
     salaryMin: optional(z.coerce.number().int().min(0).max(10_000_000)),
     salaryMax: optional(z.coerce.number().int().min(0).max(10_000_000)),

@@ -5,6 +5,10 @@ import { createApplicationAction, type FormState } from "@/app/(app)/application
 
 const initialState: FormState = { status: "idle" };
 
+// The `required` attribute already tells screen readers, so the asterisk is visual only
+const requiredMark = <span className="text-error" aria-hidden="true">*</span>;
+const optionalMark = <span className="text-base-content/60">(optional)</span>;
+
 export function ApplicationForm({ companies }: { companies: string[] }) {
   const [state, formAction, pending] = useActionState(createApplicationAction, initialState);
   const id = useId();
@@ -20,7 +24,7 @@ export function ApplicationForm({ companies }: { companies: string[] }) {
           </div>
         )}
 
-        <label className="label" htmlFor={field("company")}>Company</label>
+        <label className="label" htmlFor={field("company")}>Company {requiredMark}</label>
         <input
           id={field("company")}
           name="company"
@@ -36,11 +40,13 @@ export function ApplicationForm({ companies }: { companies: string[] }) {
           ))}
         </datalist>
 
-        <label className="label" htmlFor={field("role")}>Role</label>
+        <label className="label" htmlFor={field("role")}>Role {requiredMark}</label>
         <input id={field("role")} name="role"
           defaultValue={value("role")} className="input w-full" required />
 
-        <label className="label" htmlFor={field("postingUrl")}>Link to the posting</label>
+        <label className="label" htmlFor={field("postingUrl")}>
+          Link to the posting {requiredMark}
+        </label>
         <input
           id={field("postingUrl")}
           name="postingUrl"
@@ -48,9 +54,12 @@ export function ApplicationForm({ companies }: { companies: string[] }) {
           type="url"
           placeholder="https://"
           className="input w-full"
+          // Every posting link is unique, so the browser's history suggestions only get in the way
+          autoComplete="off"
+          required
         />
 
-        <label className="label" htmlFor={field("appliedOn")}>Date applied</label>
+        <label className="label" htmlFor={field("appliedOn")}>Date applied {optionalMark}</label>
         <input
           id={field("appliedOn")}
           name="appliedOn"
@@ -59,7 +68,7 @@ export function ApplicationForm({ companies }: { companies: string[] }) {
           defaultValue={value("appliedOn") ?? new Date().toISOString().slice(0, 10)}
         />
 
-        <span className="label">Salary range</span>
+        <span className="label">Salary range {optionalMark}</span>
         <div className="flex gap-2">
           <input
             name="salaryMin"
@@ -91,9 +100,13 @@ export function ApplicationForm({ companies }: { companies: string[] }) {
           </select>
         </div>
 
-        <label className="label" htmlFor={field("notes")}>Notes</label>
+        <label className="label" htmlFor={field("notes")}>Notes {optionalMark}</label>
         <textarea id={field("notes")} name="notes"
           defaultValue={value("notes")} rows={4} className="textarea w-full" />
+
+        <p className="mt-2 text-sm text-base-content/70">
+          Fields marked {requiredMark} are required.
+        </p>
 
         <button type="submit" className="btn btn-primary mt-2 self-start">
           {pending && <span className="loading loading-spinner loading-sm" />}
