@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { z } from "zod";
 import { ContactForm } from "@/components/contact-form";
+import { DeleteApplicationButton } from "@/components/delete-application-button";
 import { getApplication } from "@/db/queries";
 import { formatDate, formatSalary } from "@/utils/format";
 import { STAGE_LABELS } from "@/utils/stages";
@@ -38,7 +39,10 @@ async function ApplicationDetails({ params }: Pick<PageProps<"/applications/[id]
   return (
     <div className="mt-2 grid gap-8 lg:grid-cols-3">
       <div className="lg:col-span-2">
-        <h1 className="text-2xl font-semibold">{app.role}</h1>
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="text-2xl font-semibold">{app.role}</h1>
+          <DeleteApplicationButton id={app.id} role={app.role} company={app.company.name} />
+        </div>
         <p className="text-lg text-base-content/70">{app.company.name}</p>
         <span className="badge mt-2">{STAGE_LABELS[app.stage]}</span>
 

@@ -13,20 +13,14 @@ import {
   type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
 import Link from "next/link";
-import {
-  startTransition,
-  useEffect,
-  useId,
-  useOptimistic,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { startTransition, useId, useOptimistic, useState } from "react";
 import { toast } from "sonner";
 import {
   deleteApplicationAction,
   moveApplicationAction,
 } from "@/app/(app)/applications/actions";
+import { DeleteApplicationDialog } from "@/components/delete-application-dialog";
+import { Modal } from "@/components/modal";
 import type { BoardApplication } from "@/db/queries";
 import { formatDate, formatSalary } from "@/utils/format";
 import { STAGE_LABELS, STAGES, type Stage } from "@/utils/stages";
@@ -152,66 +146,12 @@ export function Board({ applications }: { applications: BoardApplication[] }) {
         {viewing && <ApplicationSummary item={viewing} />}
       </Modal>
 
-      <Modal
-        open={deleting !== null}
-        onClose={() => setDeleting(null)}
-        title="Delete application?"
-      >
-        {deleting && (
-          <>
-            <p className="py-4">
-              This permanently deletes <strong>{deleting.role}</strong> at{" "}
-              <strong>{deleting.company}</strong>, including its history. This can&apos;t be
-              undone.
-            </p>
-            <div className="modal-action">
-              <form method="dialog">
-                <button className="btn">Cancel</button>
-              </form>
-              <button type="button" className="btn btn-error" onClick={confirmDelete}>
-                Delete
-              </button>
-            </div>
-          </>
-        )}
-      </Modal>
+      <DeleteApplicationDialog
+        application={deleting}
+        onCancel={() => setDeleting(null)}
+        onConfirm={confirmDelete}
+      />
     </DndContext>
-  );
-}
-
-// Native <dialog> gives focus trapping and Esc-to-close for free
-function Modal({
-  open,
-  onClose,
-  title,
-  children,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  children: ReactNode;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
-  useEffect(() => {
-    const dialog = ref.current;
-    if (open && !dialog?.open) dialog?.showModal();
-    if (!open && dialog?.open) dialog.close();
-  }, [open]);
-
-  return (
-    <dialog ref={ref} className="modal" onClose={onClose} aria-labelledby={titleId}>
-      <div className="modal-box">
-        <h3 id={titleId} className="text-lg font-bold">
-          {title}
-        </h3>
-        {children}
-      </div>
-      {/* Click-outside-to-close for mice; keyboard and screen readers use Esc or the buttons */}
-      <form method="dialog" className="modal-backdrop" aria-hidden="true">
-        <button tabIndex={-1}>Close</button>
-      </form>
-    </dialog>
   );
 }
 
