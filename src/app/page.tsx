@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
-// Until the board exists, the home page just sends people to log in.
+// The dashboard checks the session and sends logged-out visitors to /login.
+// (Reading the session here would need a Suspense boundary under Cache Components.)
 export default function Home() {
-  redirect("/login");
+  redirect("/dashboard");
 }

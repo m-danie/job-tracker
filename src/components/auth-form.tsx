@@ -1,10 +1,16 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useActionState, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import {
+  signInAction,
+  signUpAction,
+  type AuthFormState,
+} from "@/app/(auth)/actions";
+import { MIN_PASSWORD_LENGTH } from "@/utils/password";
 
-const MIN_PASSWORD_LENGTH = 12;
+const initialState: AuthFormState = { status: "idle" };
 
 type AuthFormProps = {
   mode: "login" | "register";
@@ -21,22 +27,29 @@ export function AuthForm({ mode }: AuthFormProps) {
   const passwordId = `${id}-password`;
   const hintId = `${id}-password-hint`;
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    // Not wired to auth yet. Without this, the browser would submit as a GET
-    // request and put the password in the URL.
-    event.preventDefault();
+  const [state, formAction, pending] = useActionState(
+    isRegister ? signUpAction : signInAction,
+    initialState,
+  );
 
-    if (isRegister) {
-      // Fake success until the backend exists. The toast survives the
-      // navigation because <Toaster /> lives in the root layout.
+  useEffect(() => {
+    // Login redirects on the server; register reports success so we can toast.
+    // The toast survives the navigation because <Toaster /> is in the root layout.
+    if (isRegister && state.status === "success") {
       toast.success("Account created");
       router.push("/login");
     }
-  }
+  }, [isRegister, state, router]);
 
   return (
-    <form onSubmit={handleSubmit}>
-      <fieldset className="fieldset">
+    <form action={formAction}>
+      <fieldset className="fieldset" disabled={pending}>
+        {state.status === "error" && (
+          <div role="alert" className="alert alert-error alert-soft mb-2">
+            {state.message}
+          </div>
+        )}
+
         <label className="label" htmlFor={emailId}>
           Email
         </label>
@@ -46,6 +59,8 @@ export function AuthForm({ mode }: AuthFormProps) {
           type="email"
           className="input w-full"
           autoComplete="email"
+          // React resets the form after an action; keep what was typed
+          defaultValue={state.email}
           required
         />
 
@@ -83,6 +98,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           type="submit"
           className={`btn btn-outline mt-4 ${isRegister ? "btn-secondary" : "btn-primary"}`}
         >
+          {pending && <span className="loading loading-spinner loading-sm" />}
           {isRegister ? "Register" : "Log in"}
         </button>
       </fieldset>

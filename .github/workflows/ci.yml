@@ -5,6 +5,12 @@ on: push
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Placeholders so `next build` can import the auth route. The build never
+    # connects to a database or signs anything; real values live in Vercel.
+    env:
+      DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+      BETTER_AUTH_SECRET: ci-placeholder-secret-not-used-for-anything-real
+      BETTER_AUTH_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
