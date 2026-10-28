@@ -18,7 +18,6 @@ import { toast } from "sonner";
 import {
   deleteApplicationAction,
   moveApplicationAction,
-  rescheduleInterviewAction,
 } from "@/app/(app)/applications/actions";
 import { DeleteApplicationDialog } from "@/components/delete-application-dialog";
 import { Modal } from "@/components/modal";
@@ -69,7 +68,7 @@ const DATE_LABEL: Record<Stage, string> = {
 const currentInterview = (item: BoardApplication) =>
   item.interviews.find((i) => i.scheduledOn >= today()) ?? item.interviews.at(-1);
 
-// Still in Interview after the last interview day: the outcome needs recording
+// Still in Interview after the last interview day: waiting for the employer's answer
 const isOverdue = (item: BoardApplication) =>
   item.stage === "interview" && (item.interviews.at(-1)?.scheduledOn ?? today()) < today();
 
@@ -194,21 +193,7 @@ export function Board({ applications }: { applications: BoardApplication[] }) {
       </div>
 
       <Modal open={viewing !== null} onClose={() => setViewing(null)} title="Application">
-        {viewing && (
-          <>
-            {isOverdue(viewing) && (
-              <InterviewFollowUp
-                item={viewing}
-                onMove={(stage, date) => {
-                  setViewing(null);
-                  move(viewing, stage, date);
-                }}
-                onDone={() => setViewing(null)}
-              />
-            )}
-            <ApplicationSummary item={viewing} />
-          </>
-        )}
+        {viewing && <ApplicationSummary item={viewing} />}
       </Modal>
 
       <Modal
@@ -255,101 +240,6 @@ export function Board({ applications }: { applications: BoardApplication[] }) {
         onConfirm={confirmDelete}
       />
     </DndContext>
-  );
-}
-
-// Shown above the popup's details when an interview date has passed
-function InterviewFollowUp({
-  item,
-  onMove,
-  onDone,
-}: {
-  item: BoardApplication;
-  onMove: (stage: Stage, date: string) => void;
-  onDone: () => void;
-}) {
-  const last = item.interviews.at(-1)!;
-  // The answer picked, waiting for the date it came on
-  const [outcome, setOutcome] = useState<"offer" | "rejected" | null>(null);
-
-  async function reschedule(data: FormData) {
-    try {
-      await rescheduleInterviewAction(last.id, String(data.get("scheduledOn")));
-      toast.success("Interview date updated.");
-      onDone();
-    } catch {
-      toast.error("Couldn't update the date. Please try again.");
-    }
-  }
-
-  return (
-    <div className="alert alert-error alert-soft mt-4 flex flex-col items-start gap-3">
-      <p className="font-medium">
-        The interview on {formatDate(last.scheduledOn)} has passed. Has it happened yet?
-      </p>
-      {outcome ? (
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            onMove(outcome, String(new FormData(event.currentTarget).get("decidedOn")));
-          }}
-          className="flex flex-wrap items-center gap-2"
-        >
-          <label htmlFor="decidedOn" className="text-sm">
-            {outcome === "offer" ? "Offer received on" : "Rejected on"}
-          </label>
-          <input
-            id="decidedOn"
-            name="decidedOn"
-            type="date"
-            className="input input-sm w-40"
-            defaultValue={today()}
-            max={today()}
-            required
-          />
-          <button type="button" className="btn btn-sm" onClick={() => setOutcome(null)}>
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className={`btn btn-sm ${outcome === "offer" ? "btn-success" : "btn-error"}`}
-          >
-            Move to {STAGE_LABELS[outcome]}
-          </button>
-        </form>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="btn btn-soft btn-success btn-sm"
-            onClick={() => setOutcome("offer")}
-          >
-            Yes, I got an offer
-          </button>
-          <button
-            type="button"
-            className="btn btn-soft btn-error btn-sm"
-            onClick={() => setOutcome("rejected")}
-          >
-            Yes, I was rejected
-          </button>
-        </div>
-      )}
-      <form action={reschedule} className="flex flex-wrap items-center gap-2">
-        <span className="text-sm">Not yet:</span>
-        <input
-          name="scheduledOn"
-          type="date"
-          aria-label="New interview date"
-          className="input input-sm w-40"
-          defaultValue={last.scheduledOn}
-          required
-        />
-        <button type="submit" className="btn btn-sm">
-          Change date
-        </button>
-      </form>
-    </div>
   );
 }
 
@@ -449,6 +339,7 @@ function Card({ item, onOpen, onDelete }: { item: BoardApplication } & CardActio
     : undefined;
   const date = stageDate(item);
   const overdue = isOverdue(item);
+  const current = item.stage === "interview" ? currentInterview(item) : undefined;
 
   return (
     <li
@@ -463,7 +354,7 @@ function Card({ item, onOpen, onDelete }: { item: BoardApplication } & CardActio
       aria-roledescription="draggable application"
       // dnd-kit swallows the click that ends a drag, so this only fires on a plain click
       onClick={() => onOpen(item)}
-      className={`card card-sm cursor-grab bg-base-100 shadow-sm ${overdue ? "border-2 border-error" : "border border-base-content/25"} ${isDragging ? "relative z-10 shadow-lg" : ""}`}
+      className={`card card-sm cursor-grab bg-base-100 shadow-sm ${overdue ? "border-2 border-accent" : "border border-base-content/25"} ${isDragging ? "relative z-10 shadow-lg" : ""}`}
     >
       <div className="card-body">
         <div className="flex items-start justify-between gap-2">
@@ -491,8 +382,16 @@ function Card({ item, onOpen, onDelete }: { item: BoardApplication } & CardActio
             ? `${DATE_LABEL[item.stage]} ${formatDate(date)}`
             : `Since ${formatDate(item.stageChangedAt)}`}
         </p>
-        {/* Text as well as the red border, so the state doesn't rely on colour alone */}
-        {overdue && <span className="badge badge-error badge-sm">Interview date passed</span>}
+        {current && (
+          <div className="flex flex-wrap gap-1">
+            <span className="badge badge-outline badge-sm">
+              Round {item.interviews.indexOf(current) + 1}
+            </span>
+            {/* Text as well as the border colour, so the state doesn't rely on colour alone */}
+            {overdue && <span className="badge badge-accent badge-sm">Interview date passed</span>}
+          </div>
+        )}
+        {overdue && <p className="text-xs text-base-content/60">Waiting for a response</p>}
       </div>
     </li>
   );

@@ -226,23 +226,6 @@ export async function addInterviewAction(formData: FormData) {
   revalidatePath(`/applications/${applicationId}`);
 }
 
-export async function rescheduleInterviewAction(interviewId: string, scheduledOn: string) {
-  const user = await getCurrentUser();
-  const parsed = z.object({ id: z.uuid(), scheduledOn: z.iso.date() }).parse({
-    id: interviewId,
-    scheduledOn,
-  });
-  const applicationId = await ownedInterview(user.id, parsed.id);
-  if (!applicationId) return;
-
-  await db
-    .update(interview)
-    .set({ scheduledOn: parsed.scheduledOn })
-    .where(eq(interview.id, parsed.id));
-  revalidatePath("/board");
-  revalidatePath(`/applications/${applicationId}`);
-}
-
 export async function deleteInterviewAction(interviewId: string) {
   const user = await getCurrentUser();
   const id = z.uuid().parse(interviewId);
