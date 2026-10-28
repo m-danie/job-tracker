@@ -1,11 +1,34 @@
 import "server-only";
 import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { application, company } from "@/db/schema";
+import { application, company, interview } from "@/db/schema";
 
 // Every query takes the signed-in user's id, so one user can never read another's rows
 
 export async function getBoardApplications(userId: string) {
+  const [rows, interviews] = await Promise.all([
+    getBoardRows(userId),
+    db
+      .select({
+        id: interview.id,
+        applicationId: interview.applicationId,
+        scheduledOn: interview.scheduledOn,
+      })
+      .from(interview)
+      .innerJoin(application, eq(application.id, interview.applicationId))
+      .where(eq(application.userId, userId))
+      .orderBy(asc(interview.scheduledOn)),
+  ]);
+  return rows.map((row) => ({
+    ...row,
+    // Oldest first
+    interviews: interviews
+      .filter((i) => i.applicationId === row.id)
+      .map(({ id, scheduledOn }) => ({ id, scheduledOn })),
+  }));
+}
+
+function getBoardRows(userId: string) {
   return db
     .select({
       id: application.id,
@@ -15,6 +38,8 @@ export async function getBoardApplications(userId: string) {
       company: company.name,
       // For the card's quick-view popup
       appliedOn: application.appliedOn,
+      offeredOn: application.offeredOn,
+      rejectedOn: application.rejectedOn,
       salaryMin: application.salaryMin,
       salaryMax: application.salaryMax,
       salaryCurrency: application.salaryCurrency,
@@ -44,6 +69,7 @@ export async function getApplication(userId: string, id: string) {
     with: {
       company: true,
       stageEvents: { orderBy: (event, { desc }) => [desc(event.changedAt)] },
+      interviews: { orderBy: (row, { asc }) => [asc(row.scheduledOn)] },
       contacts: { with: { contact: true } },
     },
   });

@@ -4,6 +4,7 @@ import {
   applicationContact,
   company,
   contact,
+  interview,
   stageEvent,
   type Stage,
 } from "@/db/schema";
@@ -29,6 +30,8 @@ type DemoApplication = {
   notes?: string;
   // Stage changes after "applied", as [stage, days ago]
   moves?: [Stage, number][];
+  // Interview dates as days ago; negative is in the future
+  interviews?: number[];
   contacts?: DemoContact[];
 };
 
@@ -40,6 +43,7 @@ const APPLICATIONS: DemoApplication[] = [
     salary: [140000, 165000],
     notes: "Referred by a former colleague. Stack: Next.js, Postgres.",
     moves: [["interview", 17], ["offer", 3]],
+    interviews: [14, 8],
     contacts: [
       { name: "Priya Raman", title: "Recruiter", email: "priya@northwind.example" },
       { name: "Tom Becker", title: "Engineering Manager", email: "tom@northwind.example" },
@@ -51,6 +55,7 @@ const APPLICATIONS: DemoApplication[] = [
     appliedDaysAgo: 18,
     salary: [120000, 140000],
     moves: [["interview", 9]],
+    interviews: [-4],
     contacts: [{ name: "Alex Moreau", title: "Recruiter", email: "alex@bluefin.example" }],
   },
   {
@@ -59,6 +64,8 @@ const APPLICATIONS: DemoApplication[] = [
     appliedDaysAgo: 12,
     notes: "Small team, fully remote. Take-home due Friday.",
     moves: [["interview", 5]],
+    // Already passed, so the demo shows the follow-up prompt
+    interviews: [2],
   },
   {
     company: "Orbital Foods",
@@ -66,6 +73,7 @@ const APPLICATIONS: DemoApplication[] = [
     appliedDaysAgo: 30,
     salary: [130000, 150000],
     moves: [["interview", 21], ["rejected", 14]],
+    interviews: [18],
     notes: "Feedback: wanted more Kubernetes experience.",
   },
   {
@@ -88,6 +96,7 @@ const APPLICATIONS: DemoApplication[] = [
 ];
 
 const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+const dateDaysAgo = (days: number) => daysAgo(days).toISOString().slice(0, 10);
 
 export async function seedDemoData(userId: string) {
   await db.transaction(async (tx) => {
@@ -100,6 +109,10 @@ export async function seedDemoData(userId: string) {
     for (const demo of APPLICATIONS) {
       const moves = demo.moves ?? [];
       const last = moves.at(-1);
+      const movedTo = (stage: Stage) => {
+        const days = moves.find(([to]) => to === stage)?.[1];
+        return days === undefined ? undefined : dateDaysAgo(days);
+      };
       const [created] = await tx
         .insert(application)
         .values({
@@ -107,7 +120,9 @@ export async function seedDemoData(userId: string) {
           companyId: companyId.get(demo.company)!,
           role: demo.role,
           postingUrl: "https://example.com/jobs",
-          appliedOn: daysAgo(demo.appliedDaysAgo).toISOString().slice(0, 10),
+          appliedOn: dateDaysAgo(demo.appliedDaysAgo),
+          offeredOn: movedTo("offer"),
+          rejectedOn: movedTo("rejected"),
           salaryMin: demo.salary?.[0],
           salaryMax: demo.salary?.[1],
           notes: demo.notes,
@@ -131,6 +146,12 @@ export async function seedDemoData(userId: string) {
           return event;
         }),
       ]);
+
+      if (demo.interviews?.length) {
+        await tx
+          .insert(interview)
+          .values(demo.interviews.map((days) => ({ applicationId: created.id, scheduledOn: dateDaysAgo(days) })));
+      }
 
       if (demo.contacts?.length) {
         const contacts = await tx

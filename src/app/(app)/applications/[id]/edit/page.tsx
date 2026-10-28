@@ -41,6 +41,8 @@ async function EditForm({ params }: Pick<PageProps<"/applications/[id]/edit">, "
             role: app.role,
             postingUrl: app.postingUrl ?? "",
             appliedOn: app.appliedOn ?? "",
+            offeredOn: app.offeredOn ?? "",
+            rejectedOn: app.rejectedOn ?? "",
             salaryMin: app.salaryMin?.toString() ?? "",
             salaryMax: app.salaryMax?.toString() ?? "",
             salaryCurrency: app.salaryCurrency,

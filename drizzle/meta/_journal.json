@@ -15,6 +15,13 @@
       "when": 1793065850742,
       "tag": "0001_app_tables_demo_rate_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793207952325,
+      "tag": "0002_application_dates",
+      "breakpoints": true
     }
   ]
 }

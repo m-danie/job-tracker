@@ -87,6 +87,23 @@ export function ApplicationForm({
           defaultValue={value("appliedOn") ?? new Date().toISOString().slice(0, 10)}
         />
 
+        {/* New applications always start in Applied, so these only matter when editing */}
+        {editing && (
+          <>
+            <label className="label" htmlFor={field("offeredOn")}>
+              Offer received {optionalMark}
+            </label>
+            <input id={field("offeredOn")} name="offeredOn" type="date"
+              defaultValue={value("offeredOn")} className="input w-full" />
+
+            <label className="label" htmlFor={field("rejectedOn")}>
+              Rejected on {optionalMark}
+            </label>
+            <input id={field("rejectedOn")} name="rejectedOn" type="date"
+              defaultValue={value("rejectedOn")} className="input w-full" />
+          </>
+        )}
+
         <span className="label">Salary range {optionalMark}</span>
         <div className="flex gap-2">
           <input

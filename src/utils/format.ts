@@ -17,3 +17,7 @@ export function formatSalary(min: number | null, max: number | null, currency: s
   if (min != null && max != null) return `${money.format(min)} – ${money.format(max)}`;
   return min != null ? `From ${money.format(min)}` : `Up to ${money.format(max!)}`;
 }
+
+// "YYYY-MM-DD", the same form Postgres date columns arrive in, so dates compare as strings
+// shortcut: this is the UTC date, like formatDate; switch both to the user's time zone together
+export const today = () => new Date().toISOString().slice(0, 10);

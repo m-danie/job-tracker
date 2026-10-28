@@ -18,11 +18,12 @@ import { toast } from "sonner";
 import {
   deleteApplicationAction,
   moveApplicationAction,
+  rescheduleInterviewAction,
 } from "@/app/(app)/applications/actions";
 import { DeleteApplicationDialog } from "@/components/delete-application-dialog";
 import { Modal } from "@/components/modal";
 import type { BoardApplication } from "@/db/queries";
-import { formatDate, formatSalary } from "@/utils/format";
+import { formatDate, formatSalary, today } from "@/utils/format";
 import { STAGE_LABELS, STAGES, type Stage } from "@/utils/stages";
 
 // Complete class names so Tailwind can see them
@@ -56,19 +57,62 @@ const jumpToColumn: KeyboardCoordinateGetter = (event, { context }) => {
   };
 };
 
-type Change = { id: string; stage: Stage } | { id: string; deleted: true };
+// What the card says under the company, followed by the stage's date
+const DATE_LABEL: Record<Stage, string> = {
+  applied: "Applied on",
+  interview: "Interview on",
+  offer: "Offer received on",
+  rejected: "Rejected on",
+};
+
+// The next interview from today on, or the last one if they have all passed
+const currentInterview = (item: BoardApplication) =>
+  item.interviews.find((i) => i.scheduledOn >= today()) ?? item.interviews.at(-1);
+
+// Still in Interview after the last interview day: the outcome needs recording
+const isOverdue = (item: BoardApplication) =>
+  item.stage === "interview" && (item.interviews.at(-1)?.scheduledOn ?? today()) < today();
+
+function stageDate(item: BoardApplication) {
+  return {
+    applied: item.appliedOn,
+    interview: currentInterview(item)?.scheduledOn ?? null,
+    offer: item.offeredOn,
+    rejected: item.rejectedOn,
+  }[item.stage];
+}
+
+// Mirrors what moveApplicationAction saves, so the card shows its new date straight away
+function moved(item: BoardApplication, stage: Stage, interviewOn?: string): BoardApplication {
+  return {
+    ...item,
+    stage,
+    stageChangedAt: new Date(),
+    offeredOn: stage === "offer" ? (item.offeredOn ?? today()) : item.offeredOn,
+    rejectedOn: stage === "rejected" ? (item.rejectedOn ?? today()) : item.rejectedOn,
+    interviews: interviewOn
+      ? [...item.interviews, { id: "new", scheduledOn: interviewOn }].toSorted((a, b) =>
+          a.scheduledOn.localeCompare(b.scheduledOn),
+        )
+      : item.interviews,
+  };
+}
+
+type Change =
+  | { id: string; stage: Stage; interviewOn?: string }
+  | { id: string; deleted: true };
 
 export function Board({ applications }: { applications: BoardApplication[] }) {
   const [items, applyChange] = useOptimistic(applications, (state, change: Change) =>
     "deleted" in change
       ? state.filter((item) => item.id !== change.id)
       : state.map((item) =>
-          item.id === change.id
-            ? { ...item, stage: change.stage, stageChangedAt: new Date() }
-            : item,
+          item.id === change.id ? moved(item, change.stage, change.interviewOn) : item,
         ),
   );
   const [viewing, setViewing] = useState<BoardApplication | null>(null);
+  // Dropped from Applied onto Interview, waiting for its interview date
+  const [scheduling, setScheduling] = useState<BoardApplication | null>(null);
   const [deleting, setDeleting] = useState<BoardApplication | null>(null);
   const sensors = useSensors(
     // A short drag threshold keeps plain clicks on the card's link working
@@ -82,10 +126,16 @@ export function Board({ applications }: { applications: BoardApplication[] }) {
     const stage = over?.id as Stage | undefined;
     const item = items.find((i) => i.id === active.id);
     if (!stage || !item || item.stage === stage) return;
+    // Ask for the date first; cancelling leaves the card in Applied
+    if (item.stage === "applied" && stage === "interview") setScheduling(item);
+    else move(item, stage);
+  }
+
+  function move(item: BoardApplication, stage: Stage, interviewOn?: string) {
     startTransition(async () => {
-      applyChange({ id: item.id, stage });
+      applyChange({ id: item.id, stage, interviewOn });
       try {
-        await moveApplicationAction(item.id, stage);
+        await moveApplicationAction(item.id, stage, interviewOn);
       } catch {
         // The optimistic move rolls back on its own when the transition ends
         toast.error("Couldn't move the application. Please try again.");
@@ -143,7 +193,55 @@ export function Board({ applications }: { applications: BoardApplication[] }) {
       </div>
 
       <Modal open={viewing !== null} onClose={() => setViewing(null)} title="Application">
-        {viewing && <ApplicationSummary item={viewing} />}
+        {viewing && (
+          <>
+            {isOverdue(viewing) && (
+              <InterviewFollowUp
+                item={viewing}
+                onMove={(stage) => {
+                  setViewing(null);
+                  move(viewing, stage);
+                }}
+                onDone={() => setViewing(null)}
+              />
+            )}
+            <ApplicationSummary item={viewing} />
+          </>
+        )}
+      </Modal>
+
+      <Modal
+        open={scheduling !== null}
+        onClose={() => setScheduling(null)}
+        title="When is the interview?"
+      >
+        {scheduling && (
+          <form
+            action={(data) => {
+              move(scheduling, "interview", String(data.get("scheduledOn")));
+              setScheduling(null);
+            }}
+          >
+            <p className="mt-1 text-sm text-base-content/70">
+              {scheduling.role} at {scheduling.company}
+            </p>
+            <input
+              name="scheduledOn"
+              type="date"
+              aria-label="Interview date"
+              className="input mt-4 w-full"
+              required
+            />
+            <div className="modal-action">
+              <button type="button" className="btn" onClick={() => setScheduling(null)}>
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary">
+                Move to Interview
+              </button>
+            </div>
+          </form>
+        )}
       </Modal>
 
       <DeleteApplicationDialog
@@ -152,6 +250,59 @@ export function Board({ applications }: { applications: BoardApplication[] }) {
         onConfirm={confirmDelete}
       />
     </DndContext>
+  );
+}
+
+// Shown above the popup's details when an interview date has passed
+function InterviewFollowUp({
+  item,
+  onMove,
+  onDone,
+}: {
+  item: BoardApplication;
+  onMove: (stage: Stage) => void;
+  onDone: () => void;
+}) {
+  const last = item.interviews.at(-1)!;
+
+  async function reschedule(data: FormData) {
+    try {
+      await rescheduleInterviewAction(last.id, String(data.get("scheduledOn")));
+      toast.success("Interview date updated.");
+      onDone();
+    } catch {
+      toast.error("Couldn't update the date. Please try again.");
+    }
+  }
+
+  return (
+    <div className="alert alert-error alert-soft mt-4 flex flex-col items-start gap-3">
+      <p className="font-medium">
+        The interview on {formatDate(last.scheduledOn)} has passed. Has it happened yet?
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="btn btn-success btn-sm" onClick={() => onMove("offer")}>
+          Yes, I got an offer
+        </button>
+        <button type="button" className="btn btn-error btn-sm" onClick={() => onMove("rejected")}>
+          Yes, I was rejected
+        </button>
+      </div>
+      <form action={reschedule} className="flex flex-wrap items-center gap-2">
+        <span className="text-sm">Not yet:</span>
+        <input
+          name="scheduledOn"
+          type="date"
+          aria-label="New interview date"
+          className="input input-sm w-40"
+          defaultValue={last.scheduledOn}
+          required
+        />
+        <button type="submit" className="btn btn-sm">
+          Change date
+        </button>
+      </form>
+    </div>
   );
 }
 
@@ -168,6 +319,24 @@ function ApplicationSummary({ item }: { item: BoardApplication }) {
         <dd>{STAGE_LABELS[item.stage]}</dd>
         <dt className="font-medium">Date applied</dt>
         <dd>{item.appliedOn ? formatDate(item.appliedOn) : "—"}</dd>
+        {item.interviews.length > 0 && (
+          <>
+            <dt className="font-medium">Interviews</dt>
+            <dd>{item.interviews.map((i) => formatDate(i.scheduledOn)).join(", ")}</dd>
+          </>
+        )}
+        {item.offeredOn && (
+          <>
+            <dt className="font-medium">Offer received</dt>
+            <dd>{formatDate(item.offeredOn)}</dd>
+          </>
+        )}
+        {item.rejectedOn && (
+          <>
+            <dt className="font-medium">Rejected</dt>
+            <dd>{formatDate(item.rejectedOn)}</dd>
+          </>
+        )}
         <dt className="font-medium">Salary range</dt>
         <dd>{salary ?? "—"}</dd>
         <dt className="font-medium">Posting</dt>
@@ -231,6 +400,8 @@ function Card({ item, onOpen, onDelete }: { item: BoardApplication } & CardActio
   const style = transform
     ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
     : undefined;
+  const date = stageDate(item);
+  const overdue = isOverdue(item);
 
   return (
     <li
@@ -245,7 +416,7 @@ function Card({ item, onOpen, onDelete }: { item: BoardApplication } & CardActio
       aria-roledescription="draggable application"
       // dnd-kit swallows the click that ends a drag, so this only fires on a plain click
       onClick={() => onOpen(item)}
-      className={`card card-sm cursor-grab border border-base-content/25 bg-base-100 shadow-sm ${isDragging ? "relative z-10 shadow-lg" : ""}`}
+      className={`card card-sm cursor-grab bg-base-100 shadow-sm ${overdue ? "border-2 border-error" : "border border-base-content/25"} ${isDragging ? "relative z-10 shadow-lg" : ""}`}
     >
       <div className="card-body">
         <div className="flex items-start justify-between gap-2">
@@ -268,8 +439,13 @@ function Card({ item, onOpen, onDelete }: { item: BoardApplication } & CardActio
         </div>
         <p className="text-sm text-base-content/70">{item.company}</p>
         <p className="text-xs text-base-content/60">
-          Since {formatDate(item.stageChangedAt)}
+          {/* Older cards may have no date for their stage yet */}
+          {date
+            ? `${DATE_LABEL[item.stage]} ${formatDate(date)}`
+            : `Since ${formatDate(item.stageChangedAt)}`}
         </p>
+        {/* Text as well as the red border, so the state doesn't rely on colour alone */}
+        {overdue && <span className="badge badge-error badge-sm">Interview passed</span>}
       </div>
     </li>
   );

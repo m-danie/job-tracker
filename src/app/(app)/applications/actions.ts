@@ -10,6 +10,7 @@ import {
   applicationContact,
   company,
   contact,
+  interview,
   stageEvent,
   STAGES,
 } from "@/db/schema";
@@ -44,6 +45,8 @@ const applicationSchema = z
       .min(1, { error: "Enter the link to the posting." })
       .pipe(z.url({ protocol: /^https?$/, error: "Enter a valid link (https://…)." })),
     appliedOn: optional(z.iso.date({ error: "Enter a valid date." })),
+    offeredOn: optional(z.iso.date({ error: "Enter a valid offer date." })),
+    rejectedOn: optional(z.iso.date({ error: "Enter a valid rejection date." })),
     salaryMin: optional(z.coerce.number().int().min(0).max(10_000_000)),
     salaryMax: optional(z.coerce.number().int().min(0).max(10_000_000)),
     salaryCurrency: z.string().trim().toUpperCase().length(3).default("USD"),
@@ -124,6 +127,8 @@ export async function updateApplicationAction(
         role: fields.role,
         postingUrl: fields.postingUrl,
         appliedOn: fields.appliedOn ?? null,
+        offeredOn: fields.offeredOn ?? null,
+        rejectedOn: fields.rejectedOn ?? null,
         salaryMin: fields.salaryMin ?? null,
         salaryMax: fields.salaryMax ?? null,
         salaryCurrency: fields.salaryCurrency,
@@ -141,11 +146,16 @@ export async function updateApplicationAction(
   redirect(`/applications/${id}`);
 }
 
-const moveSchema = z.object({ id: z.uuid(), stage: z.enum(STAGES) });
+const moveSchema = z.object({
+  id: z.uuid(),
+  stage: z.enum(STAGES),
+  interviewOn: z.iso.date().optional(),
+});
 
-export async function moveApplicationAction(id: string, stage: string) {
+// interviewOn: the date asked for when a card moves from Applied to Interview
+export async function moveApplicationAction(id: string, stage: string, interviewOn?: string) {
   const user = await getCurrentUser();
-  const parsed = moveSchema.parse({ id, stage });
+  const parsed = moveSchema.parse({ id, stage, interviewOn });
 
   await db.transaction(async (tx) => {
     // Lock the row so two quick drags record their history in order
@@ -158,16 +168,86 @@ export async function moveApplicationAction(id: string, stage: string) {
 
     await tx
       .update(application)
-      .set({ stage: parsed.stage, stageChangedAt: new Date() })
+      .set({
+        stage: parsed.stage,
+        stageChangedAt: new Date(),
+        // Keep a date the user already set or edited; otherwise record today
+        ...(parsed.stage === "offer" && {
+          offeredOn: sql`coalesce(${application.offeredOn}, current_date)`,
+        }),
+        ...(parsed.stage === "rejected" && {
+          rejectedOn: sql`coalesce(${application.rejectedOn}, current_date)`,
+        }),
+      })
       .where(eq(application.id, parsed.id));
     await tx.insert(stageEvent).values({
       applicationId: parsed.id,
       fromStage: current.stage,
       toStage: parsed.stage,
     });
+    if (parsed.interviewOn) {
+      await tx
+        .insert(interview)
+        .values({ applicationId: parsed.id, scheduledOn: parsed.interviewOn });
+    }
   });
 
   revalidatePath("/board");
+}
+
+// The application id, if the user owns this interview
+async function ownedInterview(userId: string, interviewId: string) {
+  const [owned] = await db
+    .select({ applicationId: interview.applicationId })
+    .from(interview)
+    .innerJoin(application, eq(application.id, interview.applicationId))
+    .where(and(eq(interview.id, interviewId), eq(application.userId, userId)));
+  return owned?.applicationId;
+}
+
+const interviewSchema = z.object({ applicationId: z.uuid(), scheduledOn: z.iso.date() });
+
+// Plain form action: the date input is `required`, so only a tampered request fails to parse
+export async function addInterviewAction(formData: FormData) {
+  const user = await getCurrentUser();
+  const { applicationId, scheduledOn } = interviewSchema.parse(Object.fromEntries(formData));
+  const [owned] = await db
+    .select({ id: application.id })
+    .from(application)
+    .where(and(eq(application.id, applicationId), eq(application.userId, user.id)));
+  if (!owned) return;
+
+  await db.insert(interview).values({ applicationId, scheduledOn });
+  revalidatePath("/board");
+  revalidatePath(`/applications/${applicationId}`);
+}
+
+export async function rescheduleInterviewAction(interviewId: string, scheduledOn: string) {
+  const user = await getCurrentUser();
+  const parsed = z.object({ id: z.uuid(), scheduledOn: z.iso.date() }).parse({
+    id: interviewId,
+    scheduledOn,
+  });
+  const applicationId = await ownedInterview(user.id, parsed.id);
+  if (!applicationId) return;
+
+  await db
+    .update(interview)
+    .set({ scheduledOn: parsed.scheduledOn })
+    .where(eq(interview.id, parsed.id));
+  revalidatePath("/board");
+  revalidatePath(`/applications/${applicationId}`);
+}
+
+export async function deleteInterviewAction(interviewId: string) {
+  const user = await getCurrentUser();
+  const id = z.uuid().parse(interviewId);
+  const applicationId = await ownedInterview(user.id, id);
+  if (!applicationId) return;
+
+  await db.delete(interview).where(eq(interview.id, id));
+  revalidatePath("/board");
+  revalidatePath(`/applications/${applicationId}`);
 }
 
 export async function deleteApplicationAction(id: string) {

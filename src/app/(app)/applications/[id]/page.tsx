@@ -3,10 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { z } from "zod";
+import { addInterviewAction, deleteInterviewAction } from "@/app/(app)/applications/actions";
 import { ContactForm } from "@/components/contact-form";
 import { DeleteApplicationButton } from "@/components/delete-application-button";
 import { getApplication } from "@/db/queries";
-import { formatDate, formatSalary } from "@/utils/format";
+import { formatDate, formatSalary, today } from "@/utils/format";
 import { STAGE_LABELS } from "@/utils/stages";
 import { getCurrentUser } from "@/utils/session";
 
@@ -54,6 +55,44 @@ async function ApplicationDetails({ params }: Pick<PageProps<"/applications/[id]
         <dl className="mt-6 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
           <dt className="font-medium">Applied</dt>
           <dd>{app.appliedOn ? formatDate(app.appliedOn) : "—"}</dd>
+          <dt className="font-medium">Interviews</dt>
+          <dd>
+            <ul>
+              {app.interviews.map((interview) => (
+                <li key={interview.id} className="flex items-center gap-1">
+                  <span className={interview.scheduledOn < today() ? "text-base-content/60" : ""}>
+                    {formatDate(interview.scheduledOn)}
+                  </span>
+                  <form action={deleteInterviewAction.bind(null, interview.id)}>
+                    <button
+                      type="submit"
+                      aria-label={`Remove the interview on ${formatDate(interview.scheduledOn)}`}
+                      className="btn btn-square btn-ghost btn-xs"
+                    >
+                      <span aria-hidden="true">✕</span>
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+            <form action={addInterviewAction} className="mt-1 flex gap-2">
+              <input type="hidden" name="applicationId" value={app.id} />
+              <input
+                name="scheduledOn"
+                type="date"
+                aria-label="New interview date"
+                className="input input-xs w-36"
+                required
+              />
+              <button type="submit" className="btn btn-xs">
+                Add interview
+              </button>
+            </form>
+          </dd>
+          <dt className="font-medium">Offer received</dt>
+          <dd>{app.offeredOn ? formatDate(app.offeredOn) : "—"}</dd>
+          <dt className="font-medium">Rejected</dt>
+          <dd>{app.rejectedOn ? formatDate(app.rejectedOn) : "—"}</dd>
           <dt className="font-medium">Salary</dt>
           <dd>{salary ?? "—"}</dd>
           <dt className="font-medium">Posting</dt>
