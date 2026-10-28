@@ -42,7 +42,7 @@ async function ApplicationDetails({ params }: Pick<PageProps<"/applications/[id]
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-2xl font-semibold">{app.role}</h1>
           <div className="flex gap-2">
-            <Link href={`/applications/${app.id}/edit`} className="btn btn-info btn-sm">
+            <Link href={`/applications/${app.id}/edit`} className="btn btn-info btn-outline btn-sm">
               Edit
             </Link>
             <DeleteApplicationButton id={app.id} role={app.role} company={app.company.name} />
