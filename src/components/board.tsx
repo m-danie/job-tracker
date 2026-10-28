@@ -61,7 +61,7 @@ const jumpToColumn: KeyboardCoordinateGetter = (event, { context }) => {
 const DATE_LABEL: Record<Stage, string> = {
   applied: "Applied on",
   interview: "Interview on",
-  offer: "Offer received on",
+  offer: "Offer Received on",
   rejected: "Rejected on",
 };
 
@@ -83,23 +83,24 @@ function stageDate(item: BoardApplication) {
 }
 
 // Mirrors what moveApplicationAction saves, so the card shows its new date straight away
-function moved(item: BoardApplication, stage: Stage, interviewOn?: string): BoardApplication {
+function moved(item: BoardApplication, stage: Stage, date?: string): BoardApplication {
   return {
     ...item,
     stage,
     stageChangedAt: new Date(),
-    offeredOn: stage === "offer" ? (item.offeredOn ?? today()) : item.offeredOn,
-    rejectedOn: stage === "rejected" ? (item.rejectedOn ?? today()) : item.rejectedOn,
-    interviews: interviewOn
-      ? [...item.interviews, { id: "new", scheduledOn: interviewOn }].toSorted((a, b) =>
-          a.scheduledOn.localeCompare(b.scheduledOn),
-        )
-      : item.interviews,
+    offeredOn: stage === "offer" ? (date ?? item.offeredOn ?? today()) : item.offeredOn,
+    rejectedOn: stage === "rejected" ? (date ?? item.rejectedOn ?? today()) : item.rejectedOn,
+    interviews:
+      stage === "interview" && date
+        ? [...item.interviews, { id: "new", scheduledOn: date }].toSorted((a, b) =>
+            a.scheduledOn.localeCompare(b.scheduledOn),
+          )
+        : item.interviews,
   };
 }
 
 type Change =
-  | { id: string; stage: Stage; interviewOn?: string }
+  | { id: string; stage: Stage; date?: string }
   | { id: string; deleted: true };
 
 export function Board({ applications }: { applications: BoardApplication[] }) {
@@ -107,7 +108,7 @@ export function Board({ applications }: { applications: BoardApplication[] }) {
     "deleted" in change
       ? state.filter((item) => item.id !== change.id)
       : state.map((item) =>
-          item.id === change.id ? moved(item, change.stage, change.interviewOn) : item,
+          item.id === change.id ? moved(item, change.stage, change.date) : item,
         ),
   );
   const [viewing, setViewing] = useState<BoardApplication | null>(null);
@@ -131,11 +132,11 @@ export function Board({ applications }: { applications: BoardApplication[] }) {
     else move(item, stage);
   }
 
-  function move(item: BoardApplication, stage: Stage, interviewOn?: string) {
+  function move(item: BoardApplication, stage: Stage, date?: string) {
     startTransition(async () => {
-      applyChange({ id: item.id, stage, interviewOn });
+      applyChange({ id: item.id, stage, date });
       try {
-        await moveApplicationAction(item.id, stage, interviewOn);
+        await moveApplicationAction(item.id, stage, date);
       } catch {
         // The optimistic move rolls back on its own when the transition ends
         toast.error("Couldn't move the application. Please try again.");
@@ -198,9 +199,9 @@ export function Board({ applications }: { applications: BoardApplication[] }) {
             {isOverdue(viewing) && (
               <InterviewFollowUp
                 item={viewing}
-                onMove={(stage) => {
+                onMove={(stage, date) => {
                   setViewing(null);
-                  move(viewing, stage);
+                  move(viewing, stage, date);
                 }}
                 onDone={() => setViewing(null)}
               />
@@ -216,10 +217,14 @@ export function Board({ applications }: { applications: BoardApplication[] }) {
         title="When is the interview?"
       >
         {scheduling && (
+          // Not a form action: that runs as a transition, and React holds every transition's
+          // updates until all of them settle, so the popup would wait for the server
           <form
-            action={(data) => {
-              move(scheduling, "interview", String(data.get("scheduledOn")));
+            onSubmit={(event) => {
+              event.preventDefault();
+              const data = new FormData(event.currentTarget);
               setScheduling(null);
+              move(scheduling, "interview", String(data.get("scheduledOn")));
             }}
           >
             <p className="mt-1 text-sm text-base-content/70">
@@ -260,10 +265,12 @@ function InterviewFollowUp({
   onDone,
 }: {
   item: BoardApplication;
-  onMove: (stage: Stage) => void;
+  onMove: (stage: Stage, date: string) => void;
   onDone: () => void;
 }) {
   const last = item.interviews.at(-1)!;
+  // The answer picked, waiting for the date it came on
+  const [outcome, setOutcome] = useState<"offer" | "rejected" | null>(null);
 
   async function reschedule(data: FormData) {
     try {
@@ -280,14 +287,54 @@ function InterviewFollowUp({
       <p className="font-medium">
         The interview on {formatDate(last.scheduledOn)} has passed. Has it happened yet?
       </p>
-      <div className="flex flex-wrap gap-2">
-        <button type="button" className="btn btn-success btn-sm" onClick={() => onMove("offer")}>
-          Yes, I got an offer
-        </button>
-        <button type="button" className="btn btn-error btn-sm" onClick={() => onMove("rejected")}>
-          Yes, I was rejected
-        </button>
-      </div>
+      {outcome ? (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            onMove(outcome, String(new FormData(event.currentTarget).get("decidedOn")));
+          }}
+          className="flex flex-wrap items-center gap-2"
+        >
+          <label htmlFor="decidedOn" className="text-sm">
+            {outcome === "offer" ? "Offer received on" : "Rejected on"}
+          </label>
+          <input
+            id="decidedOn"
+            name="decidedOn"
+            type="date"
+            className="input input-sm w-40"
+            defaultValue={today()}
+            max={today()}
+            required
+          />
+          <button type="button" className="btn btn-sm" onClick={() => setOutcome(null)}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            className={`btn btn-sm ${outcome === "offer" ? "btn-success" : "btn-error"}`}
+          >
+            Move to {STAGE_LABELS[outcome]}
+          </button>
+        </form>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="btn btn-soft btn-success btn-sm"
+            onClick={() => setOutcome("offer")}
+          >
+            Yes, I got an offer
+          </button>
+          <button
+            type="button"
+            className="btn btn-soft btn-error btn-sm"
+            onClick={() => setOutcome("rejected")}
+          >
+            Yes, I was rejected
+          </button>
+        </div>
+      )}
       <form action={reschedule} className="flex flex-wrap items-center gap-2">
         <span className="text-sm">Not yet:</span>
         <input
@@ -327,7 +374,7 @@ function ApplicationSummary({ item }: { item: BoardApplication }) {
         )}
         {item.offeredOn && (
           <>
-            <dt className="font-medium">Offer received</dt>
+            <dt className="font-medium">Offer Received</dt>
             <dd>{formatDate(item.offeredOn)}</dd>
           </>
         )}
@@ -445,7 +492,7 @@ function Card({ item, onOpen, onDelete }: { item: BoardApplication } & CardActio
             : `Since ${formatDate(item.stageChangedAt)}`}
         </p>
         {/* Text as well as the red border, so the state doesn't rely on colour alone */}
-        {overdue && <span className="badge badge-error badge-sm">Interview passed</span>}
+        {overdue && <span className="badge badge-error badge-sm">Interview date passed</span>}
       </div>
     </li>
   );

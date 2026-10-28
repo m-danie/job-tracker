@@ -89,7 +89,7 @@ async function ApplicationDetails({ params }: Pick<PageProps<"/applications/[id]
               </button>
             </form>
           </dd>
-          <dt className="font-medium">Offer received</dt>
+          <dt className="font-medium">Offer Received</dt>
           <dd>{app.offeredOn ? formatDate(app.offeredOn) : "—"}</dd>
           <dt className="font-medium">Rejected</dt>
           <dd>{app.rejectedOn ? formatDate(app.rejectedOn) : "—"}</dd>

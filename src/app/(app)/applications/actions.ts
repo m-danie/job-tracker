@@ -14,6 +14,7 @@ import {
   stageEvent,
   STAGES,
 } from "@/db/schema";
+import { today } from "@/utils/format";
 import { getCurrentUser } from "@/utils/session";
 
 export type FormState = {
@@ -146,16 +147,21 @@ export async function updateApplicationAction(
   redirect(`/applications/${id}`);
 }
 
-const moveSchema = z.object({
-  id: z.uuid(),
-  stage: z.enum(STAGES),
-  interviewOn: z.iso.date().optional(),
-});
+const moveSchema = z
+  .object({
+    id: z.uuid(),
+    stage: z.enum(STAGES),
+    date: z.iso.date().optional(),
+  })
+  .refine(
+    ({ stage, date }) => !date || stage === "interview" || date <= today(),
+    { error: "An offer or rejection can't be in the future." },
+  );
 
-// interviewOn: the date asked for when a card moves from Applied to Interview
-export async function moveApplicationAction(id: string, stage: string, interviewOn?: string) {
+// date: the interview day when moving to Interview, or the day the offer or rejection came
+export async function moveApplicationAction(id: string, stage: string, date?: string) {
   const user = await getCurrentUser();
-  const parsed = moveSchema.parse({ id, stage, interviewOn });
+  const parsed = moveSchema.parse({ id, stage, date });
 
   await db.transaction(async (tx) => {
     // Lock the row so two quick drags record their history in order
@@ -171,12 +177,12 @@ export async function moveApplicationAction(id: string, stage: string, interview
       .set({
         stage: parsed.stage,
         stageChangedAt: new Date(),
-        // Keep a date the user already set or edited; otherwise record today
+        // The date given wins; otherwise keep one the user already set, or record today
         ...(parsed.stage === "offer" && {
-          offeredOn: sql`coalesce(${application.offeredOn}, current_date)`,
+          offeredOn: parsed.date ?? sql`coalesce(${application.offeredOn}, current_date)`,
         }),
         ...(parsed.stage === "rejected" && {
-          rejectedOn: sql`coalesce(${application.rejectedOn}, current_date)`,
+          rejectedOn: parsed.date ?? sql`coalesce(${application.rejectedOn}, current_date)`,
         }),
       })
       .where(eq(application.id, parsed.id));
@@ -185,10 +191,8 @@ export async function moveApplicationAction(id: string, stage: string, interview
       fromStage: current.stage,
       toStage: parsed.stage,
     });
-    if (parsed.interviewOn) {
-      await tx
-        .insert(interview)
-        .values({ applicationId: parsed.id, scheduledOn: parsed.interviewOn });
+    if (parsed.stage === "interview" && parsed.date) {
+      await tx.insert(interview).values({ applicationId: parsed.id, scheduledOn: parsed.date });
     }
   });
 

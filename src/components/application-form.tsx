@@ -91,7 +91,7 @@ export function ApplicationForm({
         {editing && (
           <>
             <label className="label" htmlFor={field("offeredOn")}>
-              Offer received {optionalMark}
+              Offer Received {optionalMark}
             </label>
             <input id={field("offeredOn")} name="offeredOn" type="date"
               defaultValue={value("offeredOn")} className="input w-full" />
