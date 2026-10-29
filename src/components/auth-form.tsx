@@ -4,8 +4,8 @@ import { useEffect, useId, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { authClient } from "@/utils/auth-client";
-import { loginSchema, messageFor, registerSchema } from "@/utils/auth-schemas";
-import { MIN_PASSWORD_LENGTH } from "@/utils/password";
+import { loginSchema, messageFor, newPasswordSchema, registerSchema } from "@/utils/auth-schemas";
+import { PASSWORD_HINT } from "@/utils/password";
 
 type AuthFormProps = {
   mode: "login" | "register";
@@ -18,6 +18,8 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState<Pending>(null);
   const [error, setError] = useState<string | null>(null);
+  // The password broke a register rule: the field and its hint turn red
+  const [passwordInvalid, setPasswordInvalid] = useState(false);
   const isRegister = mode === "register";
   // Unique per form instance: Next.js keeps the previous page mounted (hidden),
   // so /login and /register can be in the DOM at the same time.
@@ -33,6 +35,7 @@ export function AuthForm({ mode }: AuthFormProps) {
     () => () => {
       setPending(null);
       setError(null);
+      setPasswordInvalid(false);
     },
     [],
   );
@@ -54,7 +57,9 @@ export function AuthForm({ mode }: AuthFormProps) {
     const schema = isRegister ? registerSchema : loginSchema;
     const parsed = schema.safeParse(Object.fromEntries(new FormData(event.currentTarget)));
     if (!parsed.success) {
-      setError(parsed.error.issues[0].message);
+      const [issue] = parsed.error.issues;
+      setError(issue.message);
+      setPasswordInvalid(isRegister && issue.path[0] === "password");
       return;
     }
     const { email, password } = parsed.data;
@@ -117,15 +122,22 @@ export function AuthForm({ mode }: AuthFormProps) {
           <label className="label mt-2" htmlFor={passwordId}>
             Password
           </label>
-          <div className="input w-full">
+          <div className={`input w-full ${passwordInvalid ? "input-error" : ""}`}>
             <input
               id={passwordId}
               name="password"
               type={showPassword ? "text" : "password"}
               // "new-password" makes password managers offer to generate one
               autoComplete={isRegister ? "new-password" : "current-password"}
-              minLength={isRegister ? MIN_PASSWORD_LENGTH : undefined}
+              // No minLength: the browser's own bubble would block the submit before our checks
               aria-describedby={isRegister ? hintId : undefined}
+              aria-invalid={passwordInvalid || undefined}
+              // Drops the red as soon as the rules are met
+              onChange={(event) => {
+                if (passwordInvalid && newPasswordSchema.safeParse(event.target.value).success) {
+                  setPasswordInvalid(false);
+                }
+              }}
               required
             />
             <button
@@ -139,8 +151,8 @@ export function AuthForm({ mode }: AuthFormProps) {
             </button>
           </div>
           {isRegister && (
-            <p id={hintId} className="label">
-              At least {MIN_PASSWORD_LENGTH} characters
+            <p id={hintId} className={`label whitespace-normal ${passwordInvalid ? "text-error" : ""}`}>
+              {PASSWORD_HINT}
             </p>
           )}
 

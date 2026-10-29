@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MIN_PASSWORD_LENGTH } from "@/utils/password";
+import { MIN_PASSWORD_LENGTH, PASSWORD_HINT } from "@/utils/password";
 
 const email = z
   .string()
@@ -12,15 +12,18 @@ export const loginSchema = z.object({
   password: z.string().min(1, { error: "Enter your password." }),
 });
 
-export const registerSchema = z.object({
-  email,
-  password: z
-    .string()
-    .min(MIN_PASSWORD_LENGTH, {
-      error: `Use at least ${MIN_PASSWORD_LENGTH} characters.`,
-    })
-    .max(128, { error: "Use at most 128 characters." }),
-});
+export const newPasswordSchema = z
+  .string()
+  .min(MIN_PASSWORD_LENGTH, {
+    error: `Use at least ${MIN_PASSWORD_LENGTH} characters.`,
+  })
+  .max(128, { error: "Use at most 128 characters." })
+  .regex(/[A-Z]/, { error: "Add an uppercase letter." })
+  .regex(/[a-z]/, { error: "Add a lowercase letter." })
+  .regex(/[0-9]/, { error: "Add a number." })
+  .regex(/[^A-Za-z0-9]/, { error: "Add a symbol, e.g. ! or #." });
+
+export const registerSchema = z.object({ email, password: newPasswordSchema });
 
 type AuthError = { code?: string; status?: number };
 
@@ -36,6 +39,8 @@ export function messageFor(error: AuthError): string {
       return "An account with this email already exists.";
     case "PASSWORD_TOO_SHORT":
       return `Use at least ${MIN_PASSWORD_LENGTH} characters.`;
+    case "WEAK_PASSWORD":
+      return `${PASSWORD_HINT}.`;
     case "INVALID_EMAIL":
       return "Enter a valid email address.";
   }

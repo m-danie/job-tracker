@@ -1,10 +1,12 @@
 import { betterAuth } from "better-auth";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { anonymous } from "better-auth/plugins/anonymous";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
 import { seedDemoData } from "@/db/demo";
+import { newPasswordSchema } from "@/utils/auth-schemas";
 import { MIN_PASSWORD_LENGTH } from "@/utils/password";
 
 export const auth = betterAuth({
@@ -14,6 +16,21 @@ export const auth = betterAuth({
     minPasswordLength: MIN_PASSWORD_LENGTH,
     // Register sends people to /login instead of signing them in straight away
     autoSignIn: false,
+  },
+  hooks: {
+    // Better Auth only checks the length; the form's other rules could be skipped by
+    // calling the API directly, so check them here too
+    before: createAuthMiddleware(async (ctx) => {
+      const password =
+        ctx.path === "/sign-up/email"
+          ? ctx.body?.password
+          : ["/change-password", "/reset-password"].includes(ctx.path)
+            ? ctx.body?.newPassword
+            : undefined;
+      if (password !== undefined && !newPasswordSchema.safeParse(password).success) {
+        throw new APIError("BAD_REQUEST", { code: "WEAK_PASSWORD", message: "Password too weak." });
+      }
+    }),
   },
   socialProviders: {
     github: {
