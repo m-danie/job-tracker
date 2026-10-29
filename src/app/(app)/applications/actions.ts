@@ -285,3 +285,31 @@ export async function addContactAction(
   revalidatePath(`/applications/${applicationId}`);
   return { status: "idle" };
 }
+
+// Bound to the contact's id in the form: updateContactAction.bind(null, id)
+export async function updateContactAction(
+  id: string,
+  _previous: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const user = await getCurrentUser();
+  const parsed = contactSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success || !z.uuid().safeParse(id).success) {
+    return errorState(parsed.error?.issues[0].message ?? "Contact not found.", formData);
+  }
+  const { applicationId, name, title, email, linkedinUrl } = parsed.data;
+
+  // Filtering on the user too means another user's contact matches nothing
+  const updated = await db
+    .update(contact)
+    // Cleared optional fields arrive as undefined, which Drizzle would skip; store them as null
+    .set({ name, title: title ?? null, email: email ?? null, linkedinUrl: linkedinUrl ?? null })
+    .where(and(eq(contact.id, id), eq(contact.userId, user.id)))
+    .returning({ id: contact.id });
+  if (updated.length === 0) {
+    return errorState("Contact not found.", formData);
+  }
+
+  revalidatePath(`/applications/${applicationId}`);
+  return { status: "idle" };
+}

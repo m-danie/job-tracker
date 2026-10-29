@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { z } from "zod";
 import { addInterviewAction, deleteInterviewAction } from "@/app/(app)/applications/actions";
-import { ContactForm } from "@/components/contact-form";
+import { ContactCard, ContactForm } from "@/components/contact-form";
 import { DeleteApplicationButton } from "@/components/delete-application-button";
 import { getApplication } from "@/db/queries";
 import { formatDate, formatSalary, today } from "@/utils/format";
@@ -145,22 +145,7 @@ async function ApplicationDetails({ params }: Pick<PageProps<"/applications/[id]
             <li className="text-sm text-base-content/60">No contacts yet.</li>
           )}
           {app.contacts.map(({ contact }) => (
-            <li key={contact.id} className="card card-sm bg-base-200">
-              <div className="card-body">
-                <p className="font-medium">{contact.name}</p>
-                {contact.title && <p className="text-sm text-base-content/70">{contact.title}</p>}
-                {contact.email && (
-                  <a href={`mailto:${contact.email}`} className="link text-sm">
-                    {contact.email}
-                  </a>
-                )}
-                {contact.linkedinUrl && (
-                  <a href={contact.linkedinUrl} className="link text-sm" target="_blank" rel="noopener noreferrer">
-                    LinkedIn
-                  </a>
-                )}
-              </div>
-            </li>
+            <ContactCard key={contact.id} applicationId={app.id} contact={contact} />
           ))}
         </ul>
         <ContactForm applicationId={app.id} />
