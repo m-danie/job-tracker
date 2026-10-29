@@ -25,12 +25,13 @@ import type { BoardApplication } from "@/db/queries";
 import { formatDate, formatSalary, today } from "@/utils/format";
 import { STAGE_LABELS, STAGES, type Stage } from "@/utils/stages";
 
-// Complete class names so Tailwind can see them
+// Fixed colours, not theme ones, so the columns don't blend with the buttons.
+// Complete class names so Tailwind can see them.
 const COLUMN_ACCENT: Record<Stage, string> = {
-  applied: "border-t-neutral",
-  interview: "border-t-info",
-  offer: "border-t-success",
-  rejected: "border-t-error",
+  applied: "border-t-[#bb2ef7]",
+  interview: "border-t-[#a8eddf]",
+  offer: "border-t-[#249b17]",
+  rejected: "border-t-[#ed073c]",
 };
 
 // Keyboard drags: Left/Right arrows jump a whole column instead of 25px
