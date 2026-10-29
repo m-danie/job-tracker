@@ -386,7 +386,7 @@ function Card({ item, onOpen, onDelete }: { item: BoardApplication } & CardActio
             : `Since ${formatDate(item.stageChangedAt)}`}
         </p>
         {current && (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-col items-start gap-1">
             <span className="badge badge-outline badge-sm">
               Round {item.interviews.indexOf(current) + 1}
             </span>
