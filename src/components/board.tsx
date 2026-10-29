@@ -290,6 +290,9 @@ function ApplicationSummary({ item }: { item: BoardApplication }) {
         <dt className="font-medium">Notes</dt>
         <dd className="whitespace-pre-wrap">{item.notes || "—"}</dd>
       </dl>
+      <p className="mt-4 text-sm text-base-content/60">
+        Application History and Contacts available under More Details
+      </p>
       <div className="modal-action">
         <form method="dialog">
           <button className="btn">Close</button>
